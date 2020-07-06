@@ -168,7 +168,7 @@ def main(output_format):
 	
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
-	parser.add_argument("-f", "--format", help="Format of the file output.")
+	parser.add_argument("-f", "--format", help="Format of the output file (json or csv only).")
 	args = parser.parse_args()
 	output_format = args.format
 	if output_format == None:
