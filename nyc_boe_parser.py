@@ -25,6 +25,7 @@
 
 from bs4 import BeautifulSoup
 from datetime import datetime
+import argparse
 import sys
 import requests
 import json
@@ -140,7 +141,7 @@ def gather_information():
 	return Elections
 
 
-def main():
+def main(output_format):
 	Elections = gather_information()
 	selection_options = []
 	print("Displaying all election races...")
@@ -148,22 +149,16 @@ def main():
 		selection_options.append(name)
 		print("%s: %s" % (str(count+1), name))
 	selection = None
-	format_file = None
-	while selection is None or format_file is None:
+	while selection is None:
 		try:
 			selection = int(input("Enter integer corresponding to election name... \n"))
-			format_file = str( input("Would you like the output in json or csv format (enter json or csv)?\n"))
-			if format_file != "json" and format_file != "csv":
-				format_file = None
-				print("Invalid format name!")
-				continue
 		except ValueError:
 			print("Invalid entry... please try again!")
 			selection=None
 		if selection > 0 and selection <= len(selection_options):
 			selection -= 1
 			url_download = Elections[selection_options[selection]]['url']
-			if format_file == "json":
+			if output_format == "json":
 				convert_json(selection_options[selection], get_assembly_district(url_download))
 			else:
 				convert_csv(selection_options[selection], get_assembly_district(url_download))
@@ -172,4 +167,10 @@ def main():
 			print("Selection number does not fall within range.")
 	
 if __name__ == "__main__":
-	main()
+	parser = argparse.ArgumentParser()
+	parser.add_argument("-f", "--format", help="Format of the file output.")
+	args = parser.parse_args()
+	output_format = args.format
+	if output_format == None:
+		output_format = "csv"
+	main(output_format)
