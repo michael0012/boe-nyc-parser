@@ -164,7 +164,7 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
 	parser.add_argument("-f", "--format", help="Format of the output file (json or csv only).")
 	parser.add_argument("-s", "--show", action="store_true", default=False, help="Show all elections that can be shown.")
-	parser.add_argument("-e", "--election", help="The number corresponding to election",type=int)
+	parser.add_argument("-e", "--election", help="The number corresponding to election", type=int)
 	args = parser.parse_args()
 	output_format = args.format
 	show_options = args.show
