@@ -86,6 +86,7 @@ def convert_json(filename, results):
 	try:
 		now = datetime.now().strftime("%m_%d_%Y_%H_%M_%S")
 		filename = '%s_%s.json' % ( "_".join(filename.split()), now)
+		filename = filename.replace('/','_')
 		with open(filename, 'w') as jsonfile:
 			jsonfile.write(json.dumps(results))
 	except IOError:
@@ -96,10 +97,13 @@ def convert_csv(filename, results):
 	cleaned_results = []
 	now = datetime.now().strftime("%m_%d_%Y_%H_%M_%S")
 	filename = '%s_%s.csv' % ( "_".join(filename.split()), now)
+	filename = filename.replace('/','_')
+	print(filename)
 	for ad_key in results.keys():
 		for ed_key in results[ad_key].keys():
 			temp = {'AD-ED': str(ad_key)+"-"+ ed_key, **results[ad_key][ed_key]}
 			cleaned_results.append(temp)
+	#print(cleaned_results)
 	try:
 		with open(filename , 'w') as csvfile:
 			writer = csv.DictWriter(csvfile, fieldnames=cleaned_results[0].keys())
