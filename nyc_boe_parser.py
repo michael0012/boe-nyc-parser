@@ -83,38 +83,22 @@ def get_meta_data(soup):
 	
 
 def convert_json(filename, results):
-	try:
-		now = datetime.now().strftime("%m_%d_%Y_%H_%M_%S")
-		filename = '%s_%s.json' % ( "_".join(filename.split()), now)
-		filename = filename.replace('/','_')
-		with open(filename, 'w') as jsonfile:
-			jsonfile.write(json.dumps(results))
-	except IOError:
-		print("I/O error")
+	sys.stdout.write(json.dumps(results))
 
 def convert_csv(filename, results):
 	results = results['Detailed']
 	cleaned_results = []
-	now = datetime.now().strftime("%m_%d_%Y_%H_%M_%S")
-	filename = '%s_%s.csv' % ( "_".join(filename.split()), now)
-	filename = filename.replace('/','_')
-	print(filename)
 	for ad_key in results.keys():
 		for ed_key in results[ad_key].keys():
 			temp = {'AD-ED': str(ad_key)+"-"+ ed_key, **results[ad_key][ed_key]}
 			cleaned_results.append(temp)
-	#print(cleaned_results)
-	try:
-		with open(filename , 'w') as csvfile:
-			writer = csv.DictWriter(csvfile, fieldnames=cleaned_results[0].keys())
-			writer.writeheader()
-			for row in cleaned_results:
-				writer.writerow(row)
-	except IOError:
-		print("I/O error")
+	writer = csv.DictWriter(sys.stdout, fieldnames=cleaned_results[0].keys())
+	writer.writeheader()
+	for row in cleaned_results:
+		writer.writerow(row)
+	
 
 def gather_information():
-	print("Requesting data from BOE servers....")
 	response = requests.get(BASE_URL)
 	soup = BeautifulSoup(response.text, 'html.parser')
 	table = soup.findAll('table')[2]
@@ -131,8 +115,7 @@ def gather_information():
 				if item.a and item.a.string and item.a.string == "AD Details":
 					if not elections.get(name, None):
 						elections[name] ={}
-					elections[name] = {'url': BASE_URL+item.a['href'].replace('ADI0.html', 'AD0.html'), 'district_race': not item.a['href'].endswith('ADI0.html'), 'party': party}
-	print("Expanding list of election races....")			
+					elections[name] = {'url': BASE_URL+item.a['href'].replace('ADI0.html', 'AD0.html'), 'district_race': not item.a['href'].endswith('ADI0.html'), 'party': party}		
 	election_names = [*elections.keys()]
 	for election_name in election_names:
 		if elections[election_name]['district_race']:
@@ -149,20 +132,23 @@ def gather_information():
 	return elections
 
 
-def main(output_format):
+def main(show, election, output_format):
 	elections = gather_information()
 	selection_options = []
-	print("Displaying all election races...")
 	for count, name in enumerate(elections.keys()):
 		selection_options.append(name)
-		print("%s: %s" % (str(count+1), name))
+		if show:
+			sys.stdout.write("%s: %s\n" % (str(count+1), name))
+	if show:
+		exit()
 	selection = None
 	while selection is None:
 		try:
-			selection = int(input("Enter integer corresponding to election name... \n"))
-		except ValueError:
-			print("Invalid entry... please try again!")
+			selection = int(election)
+		except Exception as e:
+			print("Invalid entry, must use -e option followed by number corresponding to election!")
 			selection=None
+			exit()
 		if selection > 0 and selection <= len(selection_options):
 			selection -= 1
 			url_download = elections[selection_options[selection]]['url']
@@ -172,13 +158,17 @@ def main(output_format):
 				convert_csv(selection_options[selection], get_assembly_district(url_download))
 		else:
 			selection = None
-			print("Selection number does not fall within range.")
+			
 	
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
 	parser.add_argument("-f", "--format", help="Format of the output file (json or csv only).")
+	parser.add_argument("-s", "--show", action="store_true", default=False, help="Show all elections that can be shown.")
+	parser.add_argument("-e", "--election", help="The number corresponding to election",type=int)
 	args = parser.parse_args()
 	output_format = args.format
+	show_options = args.show
+	election = args.election
 	if output_format == None:
 		output_format = "csv"
-	main(output_format)
+	main(show_options, election, output_format)
