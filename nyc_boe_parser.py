@@ -63,7 +63,8 @@ def get_election_district(url):
 			for candidate in set(candidates):
 				election_data[election_district][candidate] = 0
 			for i, candidate in enumerate(candidates):
-				election_data[election_district][candidate] += int(row_data[2+i])
+				if row_data[2+i].isdigit():
+					election_data[election_district][candidate] += int(row_data[2+i])
 	return election_data
 
 def get_meta_data(soup):
@@ -76,7 +77,8 @@ def get_meta_data(soup):
 	for candidate in candidates_set:
 		total[candidate] = 0
 	for i, candidate in enumerate(candidates):
-		total[candidate] += int(row_data[1+i])
+		if row_data[1+i].isdigit():
+			total[candidate] += int(row_data[1+i])
 	return total, list(candidates_set)
 	
 
@@ -117,7 +119,9 @@ def gather_information():
 
 	for row in row_list:
 		if len(row) > 3:
-			party = row[3].string.strip()
+			party = ""
+			if row[3].string:
+				party = row[3].string.strip()
 			name = "%s %s" % (row[2].string.strip(), party)
 			for item in row[4:]:
 				if item.a and item.a.string and item.a.string == "AD Details":
