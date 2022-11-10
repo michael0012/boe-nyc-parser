@@ -24,7 +24,6 @@
 # SOFTWARE.
 
 from bs4 import BeautifulSoup
-from datetime import datetime
 import argparse
 import sys
 import requests
@@ -33,11 +32,12 @@ import csv
 
 BASE_URL = 'https://web.enrboenyc.us/'
 
-def get_assembly_district(url):
+def get_assembly_district(url, percentage_reported="NA"):
 	response = requests.get(url)
 	soup = BeautifulSoup(response.text, 'html.parser')
 	results = {}
 	results['Total'], results['Candidates'] = get_meta_data(soup)
+	results['Total']['Reporting'] = percentage_reported
 	results['Detailed'] = {}
 	a_tags = list(soup.findAll('a'))
 	for a in a_tags:
@@ -86,17 +86,33 @@ def convert_json(filename, results):
 	sys.stdout.write(json.dumps(results))
 
 def convert_csv(filename, results):
-	results = results['Detailed']
+	detailed_results = results['Detailed']
 	cleaned_results = []
-	for ad_key in results.keys():
-		for ed_key in results[ad_key].keys():
-			temp = {'AD-ED': str(ad_key)+"-"+ ed_key, **results[ad_key][ed_key]}
+	for ad_key in detailed_results.keys():
+		for ed_key in detailed_results[ad_key].keys():
+			temp = {'AD-ED': str(ad_key)+"-"+ ed_key, **detailed_results[ad_key][ed_key]}
 			cleaned_results.append(temp)
+	cleaned_results.append({'AD-ED': "Total", **results['Total']})
 	writer = csv.DictWriter(sys.stdout, fieldnames=cleaned_results[0].keys())
 	writer.writeheader()
 	for row in cleaned_results:
 		writer.writerow(row)
 	
+def get_total_percentage_reported(url):
+	response = requests.get(url)
+	soup = BeautifulSoup(response.text, 'html.parser')
+	table = soup.findAll('table')[2]
+	reporting_label = table.find_all('label')
+	if not len(reporting_label):
+		return url
+	return reporting_label[-1].string.strip()
+
+def get_district_total_percentage_reported(url, position):
+	response = requests.get(url)
+	soup = BeautifulSoup(response.text, 'html.parser')
+	table = soup.findAll('table')[2]
+	a_tag_list = table.find_all('a')
+	return get_total_percentage_reported(BASE_URL+a_tag_list[position]['href'])
 
 def gather_information():
 	response = requests.get(BASE_URL)
@@ -111,23 +127,38 @@ def gather_information():
 			if row[3].string:
 				party = row[3].string.strip()
 			name = "%s %s" % (row[2].string.strip(), party)
+			election_summary = ""
 			for item in row[4:]:
+				if item.a and item.a.string and item.a.string == "Summary":
+					election_summary = BASE_URL+item.a['href']
 				if item.a and item.a.string and item.a.string == "AD Details":
 					if not elections.get(name, None):
 						elections[name] ={}
-					elections[name] = {'url': BASE_URL+item.a['href'].replace('ADI0.html', 'AD0.html'), 'district_race': not item.a['href'].endswith('ADI0.html'), 'party': party}		
+					elections[name] = {
+						'url': BASE_URL+item.a['href'].replace('ADI0.html','AD0.html'), 
+						'district_race': not item.a['href'].endswith('ADI0.html'), 
+						'party': party,
+						'total_reported': election_summary
+					}
 	election_names = [*elections.keys()]
 	for election_name in election_names:
 		if elections[election_name]['district_race']:
 			response = requests.get(elections[election_name]['url'])
 			soup = BeautifulSoup(response.text, 'html.parser')
 			links_list = soup.find_all('a')
+			district_race_counter = 0
 			for a_tag in links_list:
 				if a_tag['href'].endswith('ADI0.html'):
 					district_race = a_tag.string.strip()
 					if elections[election_name]['party'] and not elections[election_name]['party'] in district_race:
 						district_race = "%s %s" % (district_race, elections[election_name]['party'])
-					elections[district_race] = {'url': BASE_URL+a_tag['href'].replace('ADI0.html', 'AD0.html'), 'district_race': True, 'party': elections[election_name]['party']}
+					elections[district_race] = {
+						'url': BASE_URL+a_tag['href'].replace('ADI0.html', 'AD0.html'), 
+						'district_race': True, 
+						'party': elections[election_name]['party'],
+						'total_reported': get_district_total_percentage_reported(elections[election_name]['total_reported'], district_race_counter)
+					}
+					district_race_counter+=1
 			del elections[election_name]
 	return elections
 
@@ -152,10 +183,11 @@ def main(show, election, output_format):
 		if selection > 0 and selection <= len(selection_options):
 			selection -= 1
 			url_download = elections[selection_options[selection]]['url']
+			percentage_reported = elections[selection_options[selection]]['total_reported']
 			if output_format == "json":
-				convert_json(selection_options[selection], get_assembly_district(url_download))
+				convert_json(selection_options[selection], get_assembly_district(url_download, percentage_reported))
 			else:
-				convert_csv(selection_options[selection], get_assembly_district(url_download))
+				convert_csv(selection_options[selection], get_assembly_district(url_download, percentage_reported))
 		else:
 			selection = None
 			
