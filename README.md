@@ -1,6 +1,6 @@
 # NYC-BOE Parser
 
-### A parser for the board of elections in the city of new york, unofficial election night results webpage.
+### A scraper( called it a parser as a joke :D ) for the board of elections in the city of new york, unofficial election night results webpage.
 
 To display the elections that the parser can print out use the command below:
 
