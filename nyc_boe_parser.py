@@ -80,14 +80,14 @@ def get_meta_data(url):
 	results["total_percentage_reporting"] = table.find_all('label')[-1].string.strip()
 	table_headers = table.find_all('tr')
 	temp_headers = []
-	for index, header in enumerate(table_headers):
+	for header in table_headers:
 		if "Name" in header.text:
 			if len(header.find_all('tr')) >= 1:
 				table_headers = header.find_all('tr')
 			temp_headers = header
 	
 	table_headers = [header for header in temp_headers if header.name == "th"]
-	table_counter = 0
+
 	for table_counter, header in enumerate(table_headers):
 		header_name = header.text.strip()
 		if header.text.strip():
@@ -97,7 +97,7 @@ def get_meta_data(url):
 		table_row_cleaned = [row for row in table_row if row.name == "td"]
 		if len(table_row_cleaned) >= 6:
 			temp_row = []
-			for index, table_data in enumerate(table_row_cleaned):
+			for table_data in table_row_cleaned:
 				data = table_data.text
 				if data:
 					data = data.replace('\xa0','').strip()
