@@ -32,19 +32,16 @@ import csv
 
 BASE_URL = 'https://web.enrboenyc.us/'
 
-def get_assembly_district(url, percentage_reported="NA"):
+def get_assembly_district(url):
 	response = requests.get(url)
 	soup = BeautifulSoup(response.text, 'html.parser')
 	results = {}
-	results['Total'], results['Candidates'] = get_meta_data(soup)
-	results['Total']['Reporting'] = percentage_reported
-	results['Detailed'] = {}
 	a_tags = list(soup.findAll('a'))
 	for a in a_tags:
 		if a.string.strip().startswith('AD'):
 			ad_num = int(a.string.replace('AD', '').strip())
 			if a.get('href'):
-				results['Detailed'][ad_num] = get_election_district(BASE_URL + a['href'])
+				results[ad_num] = get_election_district(BASE_URL + a['href'])
 	return results
 
 def get_election_district(url):
@@ -67,20 +64,59 @@ def get_election_district(url):
 					election_data[election_district][candidate] += int(row_data[2+i])
 	return election_data
 
-def get_meta_data(soup):
-	total ={}
+def get_meta_data(url):
+	response = requests.get(url)
+	soup = BeautifulSoup(response.text, 'html.parser')
+	results = {
+		"candidates": [],
+		"candidates_total_votes": {},
+		"candidates_percentage": {},
+		"candidates_parties": {},
+		"parties_votes": {},
+		"parties_percentages": {} 
+	}
+	headers = {}
 	table = soup.findAll('table')[2]
-	tbody = [node for node in list(table) if str(node).strip()]
-	row_data = [node.string for node in list(tbody[-1]) if str(node).strip() and node.string.replace('\xa0','')]
-	candidates = [node.string for node in list(tbody[0]) if str(node).strip() and node.string.replace('\xa0','')]
-	candidates_set = set(candidates)
-	for candidate in candidates_set:
-		total[candidate] = 0
-	for i, candidate in enumerate(candidates):
-		if row_data[1+i].isdigit():
-			total[candidate] += int(row_data[1+i])
-	return total, list(candidates_set)
+	results["total_percentage_reporting"] = table.find_all('label')[-1].string.strip()
+	table_headers = table.find_all('tr')
+	temp_headers = []
+	for index, header in enumerate(table_headers):
+		if "Name" in header.text:
+			if len(header.find_all('tr')) >= 1:
+				table_headers = header.find_all('tr')
+			temp_headers = header
 	
+	table_headers = [header for header in temp_headers if header.name == "th"]
+	table_counter = 0
+	for table_counter, header in enumerate(table_headers):
+		header_name = header.text.strip()
+		if header.text.strip():
+			headers[header_name] = table_counter
+	final_table_data = []
+	for table_row in table.find_all('tr'):
+		table_row_cleaned = [row for row in table_row if row.name == "td"]
+		if len(table_row_cleaned) >= 6:
+			temp_row = []
+			for index, table_data in enumerate(table_row_cleaned):
+				data = table_data.text
+				if data:
+					data = data.replace('\xa0','').strip()
+					temp_row.append(data)
+			final_table_data.append(temp_row)
+	candidates_set = set([row[headers["Name"]]for row in final_table_data])
+	results["candidates"] = list(candidates_set)
+	for candidate in candidates_set:
+		results["candidates_parties"][candidate] = []
+
+	for row in final_table_data:
+		if not row[headers["Party"]]:
+			results["candidates_total_votes"][row[headers["Name"]]] = int(row[headers["Votes"]]) if row[headers["Votes"]].isdigit() else 0
+			results["candidates_percentage"][row[headers["Name"]]] = row[headers["Percentage"]]
+		else:
+			results["candidates_parties"][row[headers["Name"]]].append(row[headers["Party"]])
+			results["parties_votes"][row[headers["Party"]]] = int(row[headers["Votes"]]) if row[headers["Votes"]].isdigit() else 0
+			results["parties_percentages"][row[headers["Party"]]] = row[headers["Percentage"]]
+	return results
 
 def convert_json(filename, results):
 	sys.stdout.write(json.dumps(results))
@@ -92,27 +128,18 @@ def convert_csv(filename, results):
 		for ed_key in detailed_results[ad_key].keys():
 			temp = {'AD-ED': str(ad_key)+"-"+ ed_key, **detailed_results[ad_key][ed_key]}
 			cleaned_results.append(temp)
-	cleaned_results.append({'AD-ED': "Total", **results['Total']})
+	cleaned_results.append({'AD-ED': "Total", **results['candidates_total_votes'], "Reporting": results["total_percentage_reporting"]})
 	writer = csv.DictWriter(sys.stdout, fieldnames=cleaned_results[0].keys())
 	writer.writeheader()
 	for row in cleaned_results:
 		writer.writerow(row)
-	
-def get_total_percentage_reported(url):
-	response = requests.get(url)
-	soup = BeautifulSoup(response.text, 'html.parser')
-	table = soup.findAll('table')[2]
-	reporting_label = table.find_all('label')
-	if not len(reporting_label):
-		return url
-	return reporting_label[-1].string.strip()
 
-def get_district_total_percentage_reported(url, position):
+def get_district_total_meta_data(url, position):
 	response = requests.get(url)
 	soup = BeautifulSoup(response.text, 'html.parser')
 	table = soup.findAll('table')[2]
 	a_tag_list = table.find_all('a')
-	return get_total_percentage_reported(BASE_URL+a_tag_list[position]['href'])
+	return BASE_URL+a_tag_list[position]['href']
 
 def gather_information():
 	response = requests.get(BASE_URL)
@@ -138,7 +165,7 @@ def gather_information():
 						'url': BASE_URL+item.a['href'].replace('ADI0.html','AD0.html'), 
 						'district_race': not item.a['href'].endswith('ADI0.html'), 
 						'party': party,
-						'total_reported': election_summary
+						'meta_data_url': election_summary
 					}
 	election_names = [*elections.keys()]
 	for election_name in election_names:
@@ -156,7 +183,7 @@ def gather_information():
 						'url': BASE_URL+a_tag['href'].replace('ADI0.html', 'AD0.html'), 
 						'district_race': True, 
 						'party': elections[election_name]['party'],
-						'total_reported': get_district_total_percentage_reported(elections[election_name]['total_reported'], district_race_counter)
+						'meta_data_url': get_district_total_meta_data(elections[election_name]['meta_data_url'], district_race_counter)
 					}
 					district_race_counter+=1
 			del elections[election_name]
@@ -183,11 +210,15 @@ def main(show, election, output_format):
 		if selection > 0 and selection <= len(selection_options):
 			selection -= 1
 			url_download = elections[selection_options[selection]]['url']
-			percentage_reported = elections[selection_options[selection]]['total_reported']
+			meta_data_url = elections[selection_options[selection]]['meta_data_url']
+			race_data = get_meta_data(meta_data_url)
+			# get meta data results['Detailed']
+
+			race_data['Detailed'] = get_assembly_district(url_download)
 			if output_format == "json":
-				convert_json(selection_options[selection], get_assembly_district(url_download, percentage_reported))
+				convert_json(selection_options[selection], race_data)
 			else:
-				convert_csv(selection_options[selection], get_assembly_district(url_download, percentage_reported))
+				convert_csv(selection_options[selection], race_data)
 		else:
 			selection = None
 			
