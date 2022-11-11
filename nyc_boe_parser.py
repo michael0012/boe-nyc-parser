@@ -109,7 +109,7 @@ def get_meta_data(url):
 		results["candidates_parties"][candidate] = []
 
 	for row in final_table_data:
-		if not row[headers["Party"]]:
+		if not headers.get("Party") or not row[headers["Party"]]:
 			results["candidates_total_votes"][row[headers["Name"]]] = int(row[headers["Votes"]]) if row[headers["Votes"]].isdigit() else 0
 			results["candidates_percentage"][row[headers["Name"]]] = row[headers["Percentage"]]
 		else:
